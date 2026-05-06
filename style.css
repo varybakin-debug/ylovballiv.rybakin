@@ -1,0 +1,54 @@
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f5f6f8;
+    color: #111;
+}
+
+.container {
+    max-width: 900px;
+    margin: auto;
+    padding: 20px;
+}
+
+.hero {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.hero h1 {
+    font-size: 34px;
+}
+
+.price {
+    margin: 20px 0;
+    font-size: 18px;
+}
+
+.button {
+    display: inline-block;
+    padding: 14px 22px;
+    background: black;
+    color: white;
+    text-decoration: none;
+    border-radius: 10px;
+    margin-top: 10px;
+}
+
+.section {
+    background: white;
+    margin: 20px 0;
+    padding: 25px;
+    border-radius: 12px;
+}
+
+ul {
+    padding-left: 20px;
+}
+
+.card {
+    border: 1px solid #eee;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}

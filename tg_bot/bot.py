@@ -6,7 +6,7 @@ from config import BOT_TOKEN
 from database import init_db
 from handlers.start import start, info_handler, faq_handler
 from handlers.booking import get_booking_conversation
-from handlers.admin import admin_panel, all_bookings, handle_reject_callback, get_admin_conversation
+from handlers.admin import admin_panel, all_bookings_handler, handle_reject_callback, get_admin_conversation
 from scheduler import setup_scheduler
 
 logging.basicConfig(
@@ -30,7 +30,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("bookings", all_bookings))
+    app.add_handler(CommandHandler("bookings", all_bookings_handler))
 
     # ConversationHandler для записи клиента
     app.add_handler(get_booking_conversation())

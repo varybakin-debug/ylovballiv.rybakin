@@ -12,6 +12,7 @@ async def init_db():
                 username TEXT,
                 name TEXT NOT NULL,
                 phone TEXT NOT NULL,
+                subject TEXT NOT NULL,
                 format TEXT NOT NULL,
                 preferred_time TEXT NOT NULL,
                 status TEXT DEFAULT 'pending',
@@ -24,12 +25,12 @@ async def init_db():
         await db.commit()
 
 
-async def add_booking(user_id, username, name, phone, format_, preferred_time):
+async def add_booking(user_id, username, name, phone, subject, format_, preferred_time):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            """INSERT INTO bookings (user_id, username, name, phone, format, preferred_time)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (user_id, username, name, phone, format_, preferred_time),
+            """INSERT INTO bookings (user_id, username, name, phone, subject, format, preferred_time)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, username, name, phone, subject, format_, preferred_time),
         )
         await db.commit()
         return cursor.lastrowid

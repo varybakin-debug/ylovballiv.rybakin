@@ -2,7 +2,6 @@ import logging
 from datetime import datetime
 from functools import wraps
 
-import aiosqlite
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ContextTypes,
@@ -18,19 +17,21 @@ from database import (
     confirm_booking,
     cancel_booking,
     get_booking_by_id,
-    DB_PATH,
 )
-from config import ADMIN_ID, TUTOR_USERNAME
+from config import ADMIN_ALL_ID, ADMIN_PHYSICS_ID, TUTOR_USERNAME
 
 logger = logging.getLogger(__name__)
 
 SET_DATETIME = 0
 
+SUBJECT_LABELS = {"math": "📐 Математика", "physics": "⚗️ Физика"}
+ADMIN_IDS = {ADMIN_ALL_ID, ADMIN_PHYSICS_ID}
+
 
 def admin_only(func):
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if update.effective_user.id != ADMIN_ID:
+        if update.effective_user.id not in ADMIN_IDS:
             if update.message:
                 await update.message.reply_text("⛔ Доступ запрещён.")
             elif update.callback_query:
@@ -42,18 +43,29 @@ def admin_only(func):
 
 @admin_only
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    bookings = await get_pending_bookings()
+    all_bookings = await get_pending_bookings()
+
+    user_id = update.effective_user.id
+    # Физик-админ видит только физику
+    if user_id == ADMIN_PHYSICS_ID and user_id != ADMIN_ALL_ID:
+        bookings = [b for b in all_bookings if b["subject"] == "physics"]
+    else:
+        bookings = all_bookings
+
     if not bookings:
         await update.message.reply_text("📋 Нет новых заявок.")
         return
 
     await update.message.reply_html(f"📋 <b>Новые заявки ({len(bookings)}):</b>")
     for b in bookings:
+        subj = SUBJECT_LABELS.get(b["subject"], b["subject"])
+        fmt = "Индивидуально" if b["format"] == "individual" else "Мини-группа"
         text = (
             f"<b>Заявка #{b['id']}</b>\n"
+            f"📖 {subj}\n"
             f"👤 {b['name']}\n"
             f"📱 {b['phone']}\n"
-            f"📚 {'Индивидуально' if b['format'] == 'individual' else 'Мини-группа'}\n"
+            f"📚 {fmt}\n"
             f"🕐 {b['preferred_time']}\n"
             f"📅 {b['created_at'][:16]}"
         )
@@ -67,8 +79,15 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @admin_only
-async def all_bookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    bookings = await get_all_bookings()
+async def all_bookings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    all_b = await get_all_bookings()
+
+    user_id = update.effective_user.id
+    if user_id == ADMIN_PHYSICS_ID and user_id != ADMIN_ALL_ID:
+        bookings = [b for b in all_b if b["subject"] == "physics"]
+    else:
+        bookings = all_b
+
     if not bookings:
         await update.message.reply_text("📋 Заявок пока нет.")
         return
@@ -77,9 +96,10 @@ async def all_bookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines = ["<b>Все заявки:</b>\n"]
     for b in bookings:
         emoji = status_emoji.get(b["status"], "❓")
+        subj = "Мат." if b["subject"] == "math" else "Физ."
         fmt = "Инд." if b["format"] == "individual" else "Группа"
         lines.append(
-            f"{emoji} <b>#{b['id']}</b> {b['name']} — {b['phone']} — {fmt} — {b['created_at'][:16]}"
+            f"{emoji} <b>#{b['id']}</b> [{subj}] {b['name']} — {b['phone']} — {fmt} — {b['created_at'][:16]}"
         )
 
     await update.message.reply_html("\n".join(lines))
@@ -97,11 +117,12 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
         return ConversationHandler.END
 
     context.user_data["confirming_booking_id"] = booking_id
+    subj = SUBJECT_LABELS.get(booking["subject"], "")
     await query.message.reply_text(
-        f"Введите дату и время занятия для заявки #{booking_id} ({booking['name']}).\n"
+        f"Введите дату и время занятия для заявки #{booking_id} ({booking['name']}, {subj}).\n"
         "Формат: <b>ДД.ММ.ГГГГ ЧЧ:ММ</b>\n"
         "Например: 01.06.2025 17:00\n\n"
-        "Или отправьте /skip чтобы подтвердить без конкретной даты.",
+        "Или /skip чтобы подтвердить без конкретной даты.",
         parse_mode="HTML",
     )
     return SET_DATETIME
@@ -111,7 +132,7 @@ async def handle_reject_callback(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
 
-    if query.from_user.id != ADMIN_ID:
+    if query.from_user.id not in ADMIN_IDS:
         await query.answer("⛔ Доступ запрещён.", show_alert=True)
         return
 
@@ -160,13 +181,14 @@ async def set_datetime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ Заявка #{booking_id} подтверждена на {text}.")
 
     try:
+        subj = SUBJECT_LABELS.get(booking["subject"], "")
         fmt = "Индивидуально" if booking["format"] == "individual" else "Мини-группа"
         await context.bot.send_message(
             chat_id=booking["user_id"],
             text=(
                 f"✅ <b>Занятие подтверждено!</b>\n\n"
                 f"Здравствуйте, {booking['name']}!\n"
-                f"Ваше пробное занятие запланировано на <b>{text}</b>.\n"
+                f"Ваше пробное занятие ({subj}) запланировано на <b>{text}</b>.\n"
                 f"Формат: {fmt}\n\n"
                 "Вы получите напоминание за 24 часа и за 1 час до начала.\n"
                 f"Если есть вопросы — @{TUTOR_USERNAME}"
